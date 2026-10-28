@@ -30,6 +30,43 @@ npm run dev
 
 Server odatda `http://localhost:4000` da ishlaydi.
 
+## MongoDB
+
+Ma'lumotlar MongoDB'da bitta hujjat sifatida saqlanadi (`computer_club` bazasi, `state` kolleksiyasi,
+`singleton` hujjati). Server ishga tushganda holat shu yerdan yuklanadi, har o'zgarishdan keyin esa
+2 soniyalik kechikish (debounce) bilan qayta yoziladi.
+
+Ulanish satri `MONGODB_URI` muhit o'zgaruvchisidan o'qiladi:
+
+```
+MONGODB_URI=mongodb+srv://<user>:<parol>@<cluster>.mongodb.net/computer_club?retryWrites=true&w=majority
+```
+
+`MONGODB_URI` o'rnatilmagan bo'lsa server avvalgidek faqat xotirada ishlaydi. MongoDB vaqtincha
+ulanmasa ham server ishga tushadi va 10 soniyada bir qayta urinadi — klub ishdan qolmaydi.
+
+Eslatma: `lastHeartbeatAt` ataylab saqlanmaydi, aks holda har heartbeat uchun bazaga yozish kerak bo'lardi.
+Agent qayta ishga tushganda `register` orqali holatni o'zi tiklaydi.
+
+## Lokal tarmoqda ishlatish (klub)
+
+Railway o'rniga tizim klubning lokal tarmog'ida ishlashi mumkin. Bunda stikerlar lokal IP manzilga
+yoziladi va mijoz telefoni klub WiFi'siga ulangan bo'lishi kerak.
+
+- Server: `http://192.168.100.162:4000` (qat'iy IP)
+- Kassa paneli: `http://192.168.100.162:4000/admin`
+- Stikerlar: `http://192.168.100.162:4000/p/PC-01`, `.../p/PC-02`
+- Firewall: TCP 4000 porti faqat lokal tarmoqdan (`LocalSubnet`) ochilgan
+- Avtoyuklash: `Computer Club Server` vazifasi (Windows Task Scheduler) kompyuter yonganda
+  `node dist/server.js` ni SYSTEM nomidan ishga tushiradi
+
+Kod o'zgargandan keyin:
+
+```powershell
+npm run build
+Stop-ScheduledTask -TaskName "Computer Club Server"; Start-ScheduledTask -TaskName "Computer Club Server"
+```
+
 ## Railwayga joylashtirish
 
 `railway.json` build (`npm run build`) va start (`npm start`) buyruqlarini belgilaydi, `PORT` esa `src/server.ts` ichida o'qiladi.
@@ -46,7 +83,7 @@ Deploydan keyin `Settings → Networking → Generate Domain` orqali manzil olin
 - NFC stiker va QR shu manzilga yoziladi: `https://<nom>.up.railway.app/p/PC-01`
 - `client/client.json` ichidagi `serverUrl` ham shu manzilga o'zgartiriladi
 
-Eslatma: ma'lumot hozircha xotirada saqlanadi, shuning uchun har redeploy yoki restartda sessiyalar va so'rovlar o'chadi. Doimiy saqlash keyingi bosqichda `PostgreSQL` yoki Railway volume bilan qo'shiladi.
+Eslatma: ma'lumot MongoDB'da saqlanadi, shuning uchun redeploy yoki restartdan keyin ham sessiyalar va so'rovlar joyida qoladi. Railway'da `ADMIN_KEY` va `MONGODB_URI` o'zgaruvchilarini ham qo'shib qo'ying.
 
 ## Birinchi testlar
 
@@ -92,6 +129,6 @@ curl http://localhost:4000/agent/commands/PC-01
 
 ## Muhim eslatma
 
-- Hozircha database yo'q, ma'lumotlar server restart bo'lsa o'chadi.
-- Hozircha real `Payme/Click`, `OTP`, va `WebSocket` yo'q.
-- Keyingi bosqichda `PostgreSQL` yoki `MongoDB`, keyin real payment callback ulash mumkin.
+- Ma'lumotlar MongoDB'da bitta hujjat sifatida saqlanadi; `MONGODB_URI` bo'lmasa xotira rejimida ishlaydi.
+- Hozircha real `Payme/Click`, `OTP`, va `WebSocket` yo'q (agent polling orqali ishlaydi).
+- Keyingi bosqichda real payment callback va alohida kolleksiyalar (sessions, payments) ulash mumkin.

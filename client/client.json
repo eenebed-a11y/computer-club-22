@@ -1,5 +1,5 @@
 {
-  "serverUrl": "http://192.168.1.10:4000",
+  "serverUrl": "http://192.168.100.162:4000",
   "pcId": "PC-01",
   "lockdown": false,
   "games": {

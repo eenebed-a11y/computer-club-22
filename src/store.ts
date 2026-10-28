@@ -12,6 +12,18 @@ const MIN_MINUTES = 10;
 const MAX_MINUTES = 24 * 60;
 const STEP_MINUTES = 10;
 
+// Agent buyruqlari tarixi cheksiz o'smasligi uchun saqlanadigan maksimal yozuv soni.
+const MAX_COMMAND_HISTORY = 500;
+
+export interface StoreSnapshot {
+  version: number;
+  pcs: Pc[];
+  sessions: Session[];
+  payments: Payment[];
+  cashRequests: CashRequest[];
+  commands: AgentCommand[];
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -34,6 +46,7 @@ export class AppStore {
   private payments: Payment[] = [];
   private cashRequests: CashRequest[] = [];
   private commands: AgentCommand[] = [];
+  private listeners: Array<() => void> = [];
 
   private games: Game[] = [
     { gameId: "cs2", name: "Counter-Strike 2" },
@@ -85,6 +98,36 @@ export class AppStore {
     ];
   }
 
+  /// Holat o'zgarganda chaqiriladi — MongoDB saqlash qatlami shunga ulanadi.
+  onChange(listener: () => void): void {
+    this.listeners.push(listener);
+  }
+
+  private notifyChanged(): void {
+    for (const listener of this.listeners) {
+      listener();
+    }
+  }
+
+  toSnapshot(): StoreSnapshot {
+    return {
+      version: 1,
+      pcs: this.pcs,
+      sessions: this.sessions,
+      payments: this.payments,
+      cashRequests: this.cashRequests,
+      commands: this.commands,
+    };
+  }
+
+  loadSnapshot(snapshot: StoreSnapshot): void {
+    this.pcs = snapshot.pcs;
+    this.sessions = snapshot.sessions;
+    this.payments = snapshot.payments;
+    this.cashRequests = snapshot.cashRequests;
+    this.commands = snapshot.commands;
+  }
+
   getTariffs(): Array<{ minutes: number; price: number }> {
     const tariffs: Array<{ minutes: number; price: number }> = [];
 
@@ -131,6 +174,7 @@ export class AppStore {
 
     pc.allowedGameIds = [...new Set(gameIds)];
     pc.updatedAt = nowIso();
+    this.notifyChanged();
     return pc;
   }
 
@@ -328,6 +372,7 @@ export class AppStore {
       pending.requestedMinutes = input.requestedMinutes;
       pending.phone = input.phone;
       pending.updatedAt = createdAt;
+      this.notifyChanged();
       return pending;
     }
 
@@ -342,6 +387,7 @@ export class AppStore {
     };
 
     this.cashRequests.push(cashRequest);
+    this.notifyChanged();
     return cashRequest;
   }
 
@@ -377,6 +423,7 @@ export class AppStore {
     request.status = "approved";
     request.approvedByAdminId = adminId;
     request.updatedAt = nowIso();
+    this.notifyChanged();
 
     return result;
   }
@@ -393,6 +440,7 @@ export class AppStore {
 
     request.status = "rejected";
     request.updatedAt = nowIso();
+    this.notifyChanged();
     return request;
   }
 
@@ -410,6 +458,7 @@ export class AppStore {
       pc.runtimeStatus = "available";
     }
 
+    this.notifyChanged();
     return pc;
   }
 
@@ -419,6 +468,9 @@ export class AppStore {
       throw new Error("PC topilmadi");
     }
 
+    // Heartbeat bir necha soniyada bir keladi — ataylab notifyChanged chaqirilmaydi,
+    // aks holda MongoDB'ga behuda yozuvlar ko'p bo'ladi. Agent qayta ishga tushsa
+    // o'zi register qilib holatni tiklaydi.
     pc.lastHeartbeatAt = nowIso();
     pc.updatedAt = nowIso();
     return pc;
@@ -444,6 +496,7 @@ export class AppStore {
 
     command.status = "delivered";
     command.deliveredAt = nowIso();
+    this.notifyChanged();
     return command;
   }
 
@@ -463,6 +516,12 @@ export class AppStore {
     };
 
     this.commands.push(command);
+
+    if (this.commands.length > MAX_COMMAND_HISTORY) {
+      this.commands.splice(0, this.commands.length - MAX_COMMAND_HISTORY);
+    }
+
+    this.notifyChanged();
     return command;
   }
 
